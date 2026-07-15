@@ -1,8 +1,9 @@
-import { OpenRouter } from '@openrouter/sdk';
+import OpenAI from 'openai';
 import type { AIAnalysis } from '../types.js';
 
-const openRouter = new OpenRouter({
-  apiKey: process.env.OPENROUTER_API_KEY ?? ''
+const client = new OpenAI({
+  apiKey: process.env.DEEPSEEK_API_KEY ?? 'sk-placeholder',
+  baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
 });
 
 // ========== Query Expansion（查询扩展） ==========
@@ -23,15 +24,15 @@ export async function expandKeyword(keyword: string): Promise<string[]> {
   // 不管 AI 是否可用，先提取基础核心词
   const coreTerms = extractCoreTerms(keyword);
 
-  if (!process.env.OPENROUTER_API_KEY) {
+  if (!process.env.DEEPSEEK_API_KEY) {
     const result = [keyword, ...coreTerms];
     expansionCache.set(keyword, result);
     return result;
   }
 
   try {
-    const result = await openRouter.chat.send({
-      model: 'deepseek/deepseek-v3.2',
+    const result = await client.chat.completions.create({
+      model: 'deepseek-chat',
       messages: [
         {
           role: 'system',
@@ -54,7 +55,7 @@ export async function expandKeyword(keyword: string): Promise<string[]> {
         }
       ],
       temperature: 0.2,
-      maxTokens: 300
+      max_tokens: 300
     });
 
     const rawContent = result.choices[0]?.message?.content || '';
@@ -152,8 +153,8 @@ export async function analyzeContent(content: string, keyword: string, preMatchR
   // 默认预匹配结果
   const matchResult = preMatchResult ?? { matched: false, matchedTerms: [] };
 
-  if (!process.env.OPENROUTER_API_KEY) {
-    console.warn('OpenRouter API key not configured, using fallback analysis');
+  if (!process.env.DEEPSEEK_API_KEY) {
+    console.warn('DeepSeek API key not configured, using fallback analysis');
     return {
       isReal: true,
       relevance: matchResult.matched ? 50 : 20,
@@ -167,8 +168,8 @@ export async function analyzeContent(content: string, keyword: string, preMatchR
   try {
     const prompt = buildAnalysisPrompt(keyword, matchResult);
 
-    const result = await openRouter.chat.send({
-      model: 'deepseek/deepseek-v3.2',
+    const result = await client.chat.completions.create({
+      model: 'deepseek-chat',
       messages: [
         {
           role: 'system',
@@ -180,7 +181,7 @@ export async function analyzeContent(content: string, keyword: string, preMatchR
         }
       ],
       temperature: 0.2, // 降低温度，提高判断一致性
-      maxTokens: 500
+      max_tokens: 500
     });
 
     const rawContent = result.choices[0]?.message?.content || '';
